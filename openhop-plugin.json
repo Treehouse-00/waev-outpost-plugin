@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "waev.outpost",
+  "name": "waev:outpost",
+  "description": "waev:outpost, the openHop Repeater console, served by the repeater as an application UI plugin.",
+  "ui": {
+    "type": "application",
+    "entry": "ui/index.html"
+  }
+}
