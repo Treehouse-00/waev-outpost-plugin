@@ -1,0 +1,83 @@
+# Distribution Validation
+#
+# Copied verbatim into the public distribution repository, where it validates
+# the installer and metadata without storing UI in Git. The private source
+# repository skips it: its gate is the local pre-push hook (npm run
+# verify:source), and sync-to-public.yml builds and verifies each release.
+
+name: Build Validation
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      
+      - name: Validate the public installer and metadata
+        run: |
+          # Generated UI lives in release downloads, never in Git.
+          bash -n manage.sh
+          test -f frontend/package.json
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            # Omit a ref so this also works for pull_request refs such as
+            # "123/merge", which are not ordinary remote branch names.
+            git fetch --unshallow --no-tags origin
+          fi
+          if [ "$(git rev-list --count HEAD)" != "1" ] \
+            || [ "$(git rev-list --parents -n 1 HEAD | awk '{print NF}')" != "1" ]; then
+            echo "ERROR: public distribution must contain exactly one root commit"
+            exit 1
+          fi
+          if [ -n "$(git ls-files -- frontend/dist)" ]; then
+            echo "ERROR: public distribution must not track frontend/dist/"
+            exit 1
+          fi
+          echo "✓ Public installer/metadata validated (UI is release-only)"
+
+      - name: Test public distribution pipeline
+        if: hashFiles('scripts/public-distribution.test.mjs') != ''
+        run: node --test scripts/public-distribution.test.mjs
+
+      - name: Test plugin catalogue proposal helper
+        if: hashFiles('scripts/test_update_plugin_catalogue.py') != ''
+        run: python3 -m unittest discover -s scripts -p 'test_update_plugin_catalogue.py' -v
+
+      # Guarded like the step above: this workflow is copied verbatim into the
+      # public distribution repository, which carries no scripts/ directory.
+      # An unguarded step there fails the whole validation run.
+      - name: Install a pinned yq for the installer tests
+        if: hashFiles('scripts/manage-sh.test.mjs') != ''
+        run: |
+          set -euo pipefail
+          sudo curl -fsSL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
+          echo "c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385  /usr/local/bin/yq" | sha256sum -c -
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Test the installer against every Repeater layout
+        if: hashFiles('scripts/manage-sh.test.mjs') != ''
+        run: node --test scripts/manage-sh.test.mjs
+      
+      - name: Get version info
+        run: |
+          VERSION=$(node -p "require('./frontend/package.json').version")
+          echo "Version: $VERSION"

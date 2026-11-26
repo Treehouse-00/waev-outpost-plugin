@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "waev.outpost",
+  "name": "waev:outpost",
+  "description": "waev:outpost, the openHop Repeater console, served by the repeater as an application UI plugin. Its Black Box process can keep a read-only HTTP door for guests on a port the owner chooses (8010 unless changed); it is off until the owner turns it on.",
+  "runtime": {
+    "type": "python",
+    "entrypoint": "waev-outpost-recorder"
+  },
+  "ui": {
+    "type": "application",
+    "entry": "ui/index.html"
+  }
+}
